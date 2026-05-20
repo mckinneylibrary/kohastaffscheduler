@@ -2,13 +2,11 @@
 <title>kohastaffschedule</title>
 [% INCLUDE 'doc-head-close.inc' %]
 [% INCLUDE 'header.inc' %]
-[% INCLUDE 'cat-search.inc' %]
 
 <style>
-    /* Scope styles to avoid overwriting Koha globals */
-    #koha-schedule-app { padding: 20px; background: #f8fafc; min-height: 100vh; font-family: sans-serif; }
-    .schedule-nav { display: flex; gap: 1rem; background: white; padding: 15px; border-radius: 5px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 20px; align-items: center; }
-    .schedule-nav h1 { margin: 0; font-size: 1.25rem; font-weight: bold; margin-right: auto; }
+    /* Reset Koha styles within the app container to allow Tailwind to work */
+    #koha-schedule-root { all: initial; font-family: sans-serif; display: block; background: #f1f5f9; min-height: 100vh; }
+    #koha-schedule-root * { box-sizing: border-box; }
 </style>
 
 <div id="breadcrumbs">
@@ -17,28 +15,15 @@
     kohastaffschedule
 </div>
 
-<div id="koha-schedule-app">
-    <div class="schedule-nav">
-        <h1>kohastaffschedule</h1>
-        [% IF is_admin %]
-            <span style="color: #059669; font-weight: bold; font-size: 0.8rem;">Admin Mode</span>
-        [% ELSE %]
-            <span style="color: #64748b; font-size: 0.8rem;">View Only Mode</span>
-        [% END %]
-    </div>
-
-    <div id="schedule-root"></div>
-</div>
+<div id="koha-schedule-root"></div>
 
 <script>
-    // Koha injects backend data natively into the JS window object.
-    // Your compiled JS bundle will consume this instead of loading from Supabase.
     window.KohaScheduleConfig = {
         branches: [
             [% FOREACH b IN branches %]
                 { id: "[% b.branchcode %]", name: "[% b.branchname %]" },
             [% END %]
-            { id: "OUT", name: "Out" } // Virtual branch handled by API layer
+            { id: "OUT", name: "Out" } 
         ],
         staff: [
             [% FOREACH p IN staff %]
@@ -46,18 +31,11 @@
             [% END %]
         ],
         isAdmin: [% is_admin ? 'true' : 'false' %],
+        currentUser: "[% userid %]",
         apiUrl: '/api/v1/contrib/kohastaffschedule/'
     };
-
-    // Client-side API mapping example (To replace supabase.from.insert)
-    async function createShift(payload) {
-        const response = await fetch(window.KohaScheduleConfig.apiUrl + 'assignments', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        return await response.json();
-    }
 </script>
+
 <script src="[% c.asset_url('bundle.js') %]"></script>
+
 [% INCLUDE 'intranet-bottom.inc' %]
