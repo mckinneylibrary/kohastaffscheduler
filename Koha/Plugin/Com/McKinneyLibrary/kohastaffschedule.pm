@@ -3,6 +3,18 @@ use Modern::Perl;
 use base qw(Koha::Plugins::Base);
 use C4::Context;
 
+our $metadata = {
+    name            => 'Koha Staff Schedule',
+    author          => 'McKinney Library',
+    description     => 'Staff scheduling plugin',
+    date_authored   => '2025-05-20',
+    date_updated    => '2026-05-20',
+    minimum_version => '22.11',
+    maximum_version => undef,
+    version         => '1.0.0',
+    static          => 'static',   # ← tells Koha to serve this folder
+};
+
 sub install {
     my ($self) = @_;
     my $dbh = C4::Context->dbh;
