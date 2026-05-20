@@ -2,6 +2,11 @@
  * Koha Staff Schedule Plugin – bundle.js
  * McKinney Public Library
  *
+ * DAILY HOURLY SCHEDULE VIEW
+ * Hours: 6 AM to 10 PM (17 hour columns)
+ * Rows: Staff members
+ * Zone duties displayed as floating badges above shift bars
+ *
  * No build step required. Drop alongside dashboard.tt.
  * Reads window.KohaScheduleConfig injected by the template.
  * Talks to the REST API defined in routes.pl.
@@ -28,9 +33,20 @@
 
   const API = CFG.apiUrl.replace(/\/?$/, "/"); // ensure trailing slash
 
+  // Branch color mapping
+  const BRANCH_COLORS = {
+    MAIN: { bg: "#dbeafe", text: "#0369a1", border: "#0284c7" },
+    CIRC: { bg: "#dcfce7", text: "#166534", border: "#16a34a" },
+    REF:  { bg: "#fef3c7", text: "#92400e", border: "#f59e0b" },
+    OUT:  { bg: "#fed7aa", text: "#9a3412", border: "#ea580c" },
+  };
+
+  function getBranchColor(branchcode) {
+    return BRANCH_COLORS[branchcode] || { bg: "#e2e8f0", text: "#1e293b", border: "#64748b" };
+  }
+
   /* ─────────────────────────────────────────────
    * 1.  Minimal CSS injected at runtime
-   *     (keeps dashboard.tt clean; scoped to #koha-schedule-app)
    * ───────────────────────────────────────────── */
   const CSS = `
     /* ── Layout ── */
@@ -49,33 +65,52 @@
     .ks-btn-danger:hover  { background:#dc2626; }
     .ks-btn-sm { padding:.25rem .6rem; font-size:.78rem; }
 
-    /* ── Week grid ── */
-    .ks-week-grid { overflow-x:auto; }
-    .ks-grid { border-collapse:collapse; width:100%; min-width:680px;
+    /* ── Daily Grid ── */
+    .ks-day-grid { overflow-x:auto; margin-bottom:1rem; }
+    .ks-grid { border-collapse:collapse; width:100%; min-width:800px;
                background:#fff; border-radius:6px;
                box-shadow:0 1px 4px rgba(0,0,0,.08); }
-    .ks-grid th { background:#0f172a; color:#e2e8f0; padding:.6rem .8rem;
-                  font-size:.78rem; text-transform:uppercase; letter-spacing:.05em;
-                  border:1px solid #1e293b; white-space:nowrap; }
-    .ks-grid td { padding:.5rem .8rem; border:1px solid #e2e8f0;
-                  vertical-align:top; min-width:120px; font-size:.82rem; }
-    .ks-grid tr:hover td { background:#f8fafc; }
-    .ks-shift-chip { display:inline-flex; align-items:center; gap:.3rem;
-                     background:#e0f2fe; color:#0369a1; border-radius:3px;
-                     padding:.15rem .45rem; margin:.15rem 0; font-size:.78rem;
-                     white-space:nowrap; }
-    .ks-shift-chip .del-btn { background:none; border:none; cursor:pointer;
-                               color:#64748b; font-size:.9rem; line-height:1;
-                               padding:0 .1rem; }
-    .ks-shift-chip .del-btn:hover { color:#ef4444; }
-    .ks-empty { color:#94a3b8; font-size:.8rem; }
+    .ks-grid th { background:#0f172a; color:#e2e8f0; padding:.6rem .4rem;
+                  font-size:.7rem; text-transform:uppercase; letter-spacing:.05em;
+                  border:1px solid #1e293b; white-space:nowrap; text-align:center; }
+    .ks-grid td { padding:.5rem .2rem; border:1px solid #e2e8f0;
+                  vertical-align:top; min-width:45px; font-size:.8rem; height:120px;
+                  position:relative; background:#fafafa; }
+    .ks-staff-col { background:#f1f5f9; font-weight:600; color:#0f172a;
+                    white-space:nowrap; text-align:left; padding:.5rem .8rem;
+                    min-width:140px; }
+    .ks-grid tr:hover td:not(.ks-staff-col) { background:#f0f9ff; }
+
+    /* ── Shift Bar ── */
+    .ks-shift-bar { position:absolute; top:2px; left:2px; right:2px; bottom:2px;
+                    border-radius:3px; border:1px solid; overflow:hidden;
+                    cursor:pointer; display:flex; flex-direction:column;
+                    font-size:.7rem; line-height:1.1; padding:2px;
+                    transition:box-shadow .15s; }
+    .ks-shift-bar:hover { box-shadow:0 2px 8px rgba(0,0,0,.15); }
+    .ks-shift-bar .ks-shift-label { font-weight:600; white-space:nowrap;
+                                     text-overflow:ellipsis; overflow:hidden; }
+    .ks-shift-bar .ks-shift-time { font-size:.65rem; opacity:.9; }
+
+    /* ── Zone Duty Badge ── */
+    .ks-zone-badge { position:absolute; top:-18px; left:0; 
+                     background:#9333ea; color:#fff; 
+                     font-size:.65rem; font-weight:600;
+                     padding:2px 4px; border-radius:2px;
+                     white-space:nowrap; z-index:10;
+                     max-width:90%; text-overflow:ellipsis; overflow:hidden; }
+
+    /* ── Empty cell ── */
+    .ks-empty-cell { color:#cbd5e1; font-size:.75rem; text-align:center;
+                     display:flex; align-items:center; justify-content:center; }
 
     /* ── Add-shift modal ── */
     .ks-overlay { position:fixed; inset:0; background:rgba(0,0,0,.45);
                   display:flex; align-items:center; justify-content:center;
                   z-index:9999; }
     .ks-modal { background:#fff; border-radius:8px; padding:1.5rem;
-                width:min(420px, 94vw); box-shadow:0 8px 32px rgba(0,0,0,.2); }
+                width:min(460px, 94vw); box-shadow:0 8px 32px rgba(0,0,0,.2);
+                max-height:90vh; overflow-y:auto; }
     .ks-modal h2 { margin:0 0 1rem; font-size:1rem; color:#0f172a; }
     .ks-form-row { display:flex; flex-direction:column; gap:.25rem; margin-bottom:.9rem; }
     .ks-form-row label { font-size:.82rem; color:#475569; font-weight:600; }
@@ -110,15 +145,6 @@
     return `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`;
   }
 
-  /** Monday of the week containing `d` */
-  function weekStart(d) {
-    const copy = new Date(d);
-    const day = copy.getDay(); // 0=Sun
-    const diff = day === 0 ? -6 : 1 - day;
-    copy.setDate(copy.getDate() + diff);
-    return copy;
-  }
-
   /** Add N days to a Date, return new Date */
   const addDays = (d, n) => {
     const c = new Date(d);
@@ -135,6 +161,13 @@
   function fmtTime(t) {
     if (!t) return "";
     return t.slice(0, 5);
+  }
+
+  /** Parse hour from time string HH:MM */
+  function parseHour(timeStr) {
+    if (!timeStr) return 0;
+    const [h] = timeStr.split(":").map(Number);
+    return h;
   }
 
   /** Lookup helpers */
@@ -180,9 +213,9 @@
       return r.ok;
     },
 
-    /** Fetch all assignments for a 7-day window */
-    async getWeek(from, to) {
-      return this.get(`assignments?from=${from}&to=${to}`);
+    /** Fetch all assignments for a single day */
+    async getDay(date) {
+      return this.get(`assignments?from=${date}&to=${date}`);
     },
 
     /** Create a new shift */
@@ -200,13 +233,13 @@
    * 4.  State
    * ───────────────────────────────────────────── */
   const state = {
-    weekOf: weekStart(new Date()), // Monday of displayed week
-    branchFilter: "",              // "" = all
-    assignments: [],               // raw rows from API
+    currentDate: new Date(),           // currently displayed day
+    branchFilter: "",                  // "" = all
+    assignments: [],                   // raw rows from API
     loading: false,
-    msg: null,                     // { text, type } or null
+    msg: null,                         // { text, type } or null
     modalOpen: false,
-    modalDefaults: {},             // pre-fill date/branch when clicking a cell
+    modalDefaults: {},                 // pre-fill when clicking a cell
   };
 
   /* ─────────────────────────────────────────────
@@ -238,14 +271,14 @@
    * ───────────────────────────────────────────── */
 
   function buildToolbar() {
-    const prevBtn = el("button", { className: "ks-btn ks-btn-primary", onClick: () => navigate(-7) }, "◀ Prev");
-    const nextBtn = el("button", { className: "ks-btn ks-btn-primary", onClick: () => navigate(7) }, "Next ▶");
+    const prevBtn = el("button", { className: "ks-btn ks-btn-primary", onClick: () => navigate(-1) }, "◀ Prev");
+    const nextBtn = el("button", { className: "ks-btn ks-btn-primary", onClick: () => navigate(1) }, "Next ▶");
     const todayBtn = el("button", { className: "ks-btn ks-btn-primary", onClick: () => jumpToday() }, "Today");
 
-    const weekLabel = el(
+    const dayLabel = el(
       "strong",
       {},
-      `${dayLabel(state.weekOf)} – ${dayLabel(addDays(state.weekOf, 6))}`
+      `${dayLabel(state.currentDate)}`
     );
 
     // Branch filter
@@ -268,7 +301,7 @@
       prevBtn,
       todayBtn,
       nextBtn,
-      weekLabel,
+      dayLabel,
       el("label", {}, "Branch: ", branchSel)
     );
 
@@ -289,77 +322,114 @@
   }
 
   function buildGrid() {
-    // Build 7-day columns
-    const days = Array.from({ length: 7 }, (_, i) => addDays(state.weekOf, i));
+    const dateStr = isoDate(state.currentDate);
 
-    // Filter assignments
-    const visible = state.assignments.filter((a) =>
-      state.branchFilter ? a.branchcode === state.branchFilter : true
-    );
+    // Filter assignments by date and branch
+    const visible = state.assignments.filter((a) => {
+      const dateMatch = a.shift_date === dateStr;
+      const branchMatch = state.branchFilter ? a.branchcode === state.branchFilter : true;
+      return dateMatch && branchMatch;
+    });
 
-    // Group by date
-    const byDate = {};
-    for (const a of visible) {
-      byDate[a.shift_date] = byDate[a.shift_date] || [];
-      byDate[a.shift_date].push(a);
-    }
-
-    // Header row
-    const thead = el("thead");
-    const hrow = el("tr");
-    hrow.appendChild(el("th", {}, "Staff"));
-    for (const d of days) hrow.appendChild(el("th", {}, dayLabel(d)));
-    thead.appendChild(hrow);
-
-    // One row per staff member visible this week
+    // Get unique staff members for this day
     const staffIds = [
       ...new Set(
         visible
           .map((a) => String(a.borrowernumber))
           .concat(CFG.staff.map((s) => String(s.id)))
       ),
-    ];
+    ].sort();
+
+    // Hour columns: 6 AM to 10 PM
+    const HOURS = Array.from({ length: 17 }, (_, i) => 6 + i);
+
+    // Build table
+    const thead = el("thead");
+    const hrow = el("tr");
+    hrow.appendChild(el("th", {}, "Staff"));
+    for (const h of HOURS) {
+      const label = h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`;
+      hrow.appendChild(el("th", {}, label));
+    }
+    thead.appendChild(hrow);
 
     const tbody = el("tbody");
     for (const sid of staffIds) {
       const row = el("tr");
-      row.appendChild(el("td", { style: "white-space:nowrap;font-weight:600;color:#0f172a" }, staffName(sid)));
+      row.appendChild(
+        el("td", { className: "ks-staff-col" }, staffName(sid))
+      );
 
-      for (const d of days) {
-        const dateStr = isoDate(d);
-        const shifts = (byDate[dateStr] || []).filter(
-          (a) => String(a.borrowernumber) === sid
-        );
-
+      for (const hour of HOURS) {
         const cell = el("td", {
           style: "cursor:" + (CFG.isAdmin ? "pointer" : "default"),
           onClick: CFG.isAdmin
-            ? () => openModal({ borrowernumber: sid, shift_date: dateStr })
+            ? () => openModal({ borrowernumber: sid, shift_date: dateStr, hour })
             : null,
         });
 
-        if (shifts.length === 0) {
-          cell.appendChild(el("span", { className: "ks-empty" }, "—"));
+        // Find shifts that overlap this hour
+        const shiftsThisHour = visible.filter((a) => {
+          if (String(a.borrowernumber) !== sid) return false;
+          const startH = parseHour(a.start_time);
+          const endH = parseHour(a.end_time);
+          return hour >= startH && hour < endH;
+        });
+
+        if (shiftsThisHour.length === 0) {
+          cell.appendChild(el("div", { className: "ks-empty-cell" }, "—"));
         } else {
-          for (const s of shifts) {
-            const chip = el(
-              "div",
-              { className: "ks-shift-chip" },
-              `${branchName(s.branchcode)} ${fmtTime(s.start_time)}–${fmtTime(s.end_time)}`
-            );
-            if (CFG.isAdmin) {
-              const delBtn = el("button", {
-                className: "del-btn",
-                title: "Delete shift",
-                onClick(e) {
+          // For simplicity, show first shift spanning this hour
+          const s = shiftsThisHour[0];
+          const color = getBranchColor(s.branchcode);
+
+          // Only show shift label on first hour
+          const startH = parseHour(s.start_time);
+          const isFirstHour = hour === startH;
+
+          const bar = el("div", {
+            className: "ks-shift-bar",
+            style: `background-color:${color.bg}; border-color:${color.border}; color:${color.text};`,
+            title: `${branchName(s.branchcode)} ${fmtTime(s.start_time)}–${fmtTime(s.end_time)}${s.zone_duty ? " • " + s.zone_duty : ""}`,
+            onClick: CFG.isAdmin
+              ? (e) => {
                   e.stopPropagation();
-                  deleteShift(s.id);
-                },
-              }, "×");
-              chip.appendChild(delBtn);
+                  openModal({ shiftId: s.id, edit: true });
+                }
+              : null,
+          });
+
+          if (isFirstHour) {
+            bar.appendChild(
+              el("div", { className: "ks-shift-label" }, branchName(s.branchcode))
+            );
+            bar.appendChild(
+              el("div", { className: "ks-shift-time" }, `${fmtTime(s.start_time)}–${fmtTime(s.end_time)}`)
+            );
+
+            // Zone duty badge floating above on first hour
+            if (s.zone_duty) {
+              bar.appendChild(
+                el("div", { className: "ks-zone-badge" }, s.zone_duty)
+              );
             }
-            cell.appendChild(chip);
           }
+
+          // Delete button for admins (show only on first hour)
+          if (CFG.isAdmin && isFirstHour) {
+            const delBtn = el("button", {
+              className: "ks-btn ks-btn-sm ks-btn-danger",
+              style: "position:absolute; bottom:2px; right:2px; padding:1px 3px;",
+              title: "Delete shift",
+              onClick(e) {
+                e.stopPropagation();
+                deleteShift(s.id);
+              },
+            }, "×");
+            bar.appendChild(delBtn);
+          }
+
+          cell.appendChild(bar);
         }
         row.appendChild(cell);
       }
@@ -370,13 +440,13 @@
     if (staffIds.length === 0) {
       const empty = el("tr");
       empty.appendChild(
-        el("td", { colspan: "8", style: "text-align:center;color:#94a3b8;padding:2rem" }, "No shifts this week.")
+        el("td", { colSpan: "18", style: "text-align:center;color:#94a3b8;padding:2rem" }, "No staff scheduled for this day.")
       );
       tbody.appendChild(empty);
     }
 
     const grid = el("table", { className: "ks-grid" }, thead, tbody);
-    return el("div", { className: "ks-week-grid" }, grid);
+    return el("div", { className: "ks-day-grid" }, grid);
   }
 
   function buildModal() {
@@ -409,7 +479,8 @@
     });
     const startIn = el("input", { type: "time", name: "start_time", value: def.start_time || "09:00" });
     const endIn   = el("input", { type: "time", name: "end_time",   value: def.end_time   || "17:00" });
-    const notesIn = el("input", { type: "text", name: "notes", placeholder: "Optional notes" });
+    const zoneDutyIn = el("input", { type: "text", name: "zone_duty", placeholder: "e.g., Reference Desk, Shelving", value: def.zone_duty || "" });
+    const notesIn = el("input", { type: "text", name: "notes", placeholder: "Optional notes", value: def.notes || "" });
 
     async function submit() {
       const payload = {
@@ -418,6 +489,7 @@
         shift_date:     dateIn.value,
         start_time:     startIn.value,
         end_time:       endIn.value,
+        zone_duty:      zoneDutyIn.value,
         notes:          notesIn.value,
       };
       if (!payload.borrowernumber || !payload.shift_date) {
@@ -428,7 +500,7 @@
         await Api.createAssignment(payload);
         showMsg("Shift added.", "ok");
         closeModal();
-        await loadWeek();
+        await loadDay();
       } catch (e) {
         showMsg("Error saving shift: " + e.message, "err");
       }
@@ -443,6 +515,7 @@
       el("div", { className: "ks-form-row" }, el("label", {}, "Date"),         dateIn),
       el("div", { className: "ks-form-row" }, el("label", {}, "Start Time"),   startIn),
       el("div", { className: "ks-form-row" }, el("label", {}, "End Time"),     endIn),
+      el("div", { className: "ks-form-row" }, el("label", {}, "Zone Duty"),    zoneDutyIn),
       el("div", { className: "ks-form-row" }, el("label", {}, "Notes"),        notesIn),
       el(
         "div",
@@ -485,13 +558,12 @@
   /* ─────────────────────────────────────────────
    * 8.  Actions
    * ───────────────────────────────────────────── */
-  async function loadWeek() {
+  async function loadDay() {
     state.loading = true;
     render();
-    const from = isoDate(state.weekOf);
-    const to   = isoDate(addDays(state.weekOf, 6));
+    const date = isoDate(state.currentDate);
     try {
-      state.assignments = await Api.getWeek(from, to);
+      state.assignments = await Api.getDay(date);
     } catch (e) {
       showMsg("Could not load schedule: " + e.message, "err");
       state.assignments = [];
@@ -501,13 +573,13 @@
   }
 
   function navigate(days) {
-    state.weekOf = addDays(state.weekOf, days);
-    loadWeek();
+    state.currentDate = addDays(state.currentDate, days);
+    loadDay();
   }
 
   function jumpToday() {
-    state.weekOf = weekStart(new Date());
-    loadWeek();
+    state.currentDate = new Date();
+    loadDay();
   }
 
   async function deleteShift(id) {
@@ -515,7 +587,7 @@
     try {
       await Api.deleteAssignment(id);
       showMsg("Shift deleted.", "ok");
-      await loadWeek();
+      await loadDay();
     } catch (e) {
       showMsg("Error deleting: " + e.message, "err");
     }
@@ -550,7 +622,7 @@
       console.warn("[KohaSchedule] #schedule-root not found – aborting.");
       return;
     }
-    loadWeek();
+    loadDay();
   }
 
   if (document.readyState === "loading") {
