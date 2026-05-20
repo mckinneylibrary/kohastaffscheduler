@@ -32,7 +32,7 @@ Fetch all assignments within a date range. Query parameters:
   - from: start date (required, YYYY-MM-DD format)
   - to:   end date (required, YYYY-MM-DD format)
 
-Returns a JSON array of assignment objects.
+Returns a JSON array of assignment objects including zone_duty.
 
 =cut
 
@@ -62,7 +62,7 @@ sub list_assignments {
     try {
         my $dbh = C4::Context->dbh;
         my $data = $dbh->selectall_arrayref(
-            "SELECT id, borrowernumber, branchcode, shift_date, start_time, end_time, notes
+            "SELECT id, borrowernumber, branchcode, shift_date, start_time, end_time, zone_duty, notes
              FROM plugin_ks_assignments
              WHERE shift_date BETWEEN ? AND ?
              ORDER BY shift_date ASC, start_time ASC",
@@ -92,10 +92,11 @@ Create a new shift assignment. Request body should be JSON:
     "shift_date": "2026-05-21",
     "start_time": "09:00",
     "end_time": "17:00",
+    "zone_duty": "Reference Desk",
     "notes": "Opening shift"
   }
 
-Special handling for "OUT" branch: stores is_out flag if branchcode is "OUT".
+All fields except zone_duty and notes are required.
 
 Returns the created assignment object with id.
 
@@ -190,8 +191,8 @@ sub create_assignment {
     try {
         my $sth = $dbh->prepare(
             "INSERT INTO plugin_ks_assignments
-             (borrowernumber, branchcode, shift_date, start_time, end_time, notes)
-             VALUES (?, ?, ?, ?, ?, ?)"
+             (borrowernumber, branchcode, shift_date, start_time, end_time, zone_duty, notes)
+             VALUES (?, ?, ?, ?, ?, ?, ?)"
         );
         $sth->execute(
             $json->{borrowernumber},
@@ -199,13 +200,14 @@ sub create_assignment {
             $json->{shift_date},
             $json->{start_time} || '09:00',
             $json->{end_time}   || '17:00',
+            $json->{zone_duty}  || '',
             $json->{notes}      || ''
         );
 
         # Fetch the created assignment
         my $id = $dbh->last_insert_id( undef, undef, 'plugin_ks_assignments', 'id' );
         my $created = $dbh->selectrow_hashref(
-            "SELECT id, borrowernumber, branchcode, shift_date, start_time, end_time, notes
+            "SELECT id, borrowernumber, branchcode, shift_date, start_time, end_time, zone_duty, notes
              FROM plugin_ks_assignments WHERE id = ?",
             {},
             $id
