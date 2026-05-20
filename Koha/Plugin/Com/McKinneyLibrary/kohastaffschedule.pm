@@ -52,6 +52,7 @@ sub install {
         shift_date DATE NOT NULL,
         start_time TIME,
         end_time TIME,
+        zone_duty VARCHAR(100),
         notes TEXT,
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -194,4 +195,3 @@ See the LICENSE file included in the plugin distribution for details.
 
 For issues, questions, or contributions, visit:
 https://github.com/mckinneylibrary/kohastaffscheduler
-
