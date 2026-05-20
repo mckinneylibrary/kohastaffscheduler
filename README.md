@@ -1,3 +1,29 @@
-📂 kohastaffscheduleA native staff scheduling plugin for the Koha ILS.📖 Overviewkohastaffschedule bridges the gap between managing borrower records and branch locations within Koha. This plugin moves scheduling away from external dependencies (like Supabase) and integrates it natively into the Koha MariaDB database, ensuring your staff data and branch configurations remain in a single source of truth.✨ Key FeaturesNative Integration: Operates directly within Koha's borrowers and branches tables.Custom Task Zones: Create color-coded work zones (e.g., Circulation, Reference, Technical Services) to manage coverage.Closure Awareness: Prevents scheduling on library holidays and closed dates defined in your Koha calendar."Out" Status Logic: Seamlessly manages off-site staff time without the need for a "fake" branch code.Audit Logging: Tracks all modifications to ensure staff accountability.System Analytics: Integrated reporting for coverage variance, zone utilization, and daily staffing heatmaps.🛠 Technical ArchitectureBackend: Perl (Inherits from Koha::Plugins::Base).Database: Native MariaDB tables (plugin_kohastaffschedule_*).Frontend: Compiled static JS bundle injected via Template Toolkit (dashboard.tt).Permissions: Custom manage_schedule permission integrated into Koha's permission system.🚀 Installation & Deployment1. BuildEnsure your project is configured for a static export. Run:Bashnpm run build
+📂 kohastaffscheduleA native staff scheduling plugin for the Koha ILS.
+
+📖 Overviewkohastaffschedule bridges the gap between managing borrower records and branch locations within Koha. 
+
+This plugin moves scheduling away from external dependencies and integrates it natively into the Koha MariaDB database, ensuring your staff data and branch configurations remain in a single source of truth.
+
+✨ Key FeaturesNative Integration: Operates directly within Koha's borrowers and branches tables.
+
+    Custom Task Zones: Create color-coded work zones (e.g., Circulation, Reference, Technical Services) to manage coverage.
+    Closure Awareness: Prevents scheduling on library holidays and closed dates defined in your Koha calendar.
+    "Out" Status Logic: Seamlessly manages off-site staff time without the need for a "fake" branch code.
+    Audit Logging: Tracks all modifications to ensure staff accountability.
+    System Analytics: Integrated reporting for coverage variance, zone utilization, and daily staffing heatmaps.
+
+🛠 Technical ArchitectureBackend: Perl (Inherits from Koha::Plugins::Base).Database: Native MariaDB tables (plugin_kohastaffschedule_*).Frontend: Compiled static JS bundle injected via Template Toolkit (dashboard.tt).Permissions: Custom manage_schedule permission integrated into Koha's permission system.
+
+🚀 Installation & Deployment
+1. BuildEnsure your project is configured for a static export. Run:Bashnpm run build
 2. PackageZip the Koha directory into a .kpz file:Bashzip -r kohastaffschedule.kpz Koha/
-3. DeployNavigate to Koha Administration > Manage Plugins.Click Upload plugin and select your kohastaffschedule.kpz file.Once the installation completes, click Run tool from the plugin actions menu to initialize the dashboard.🔌 API DocumentationThe plugin exposes internal REST endpoints:MethodEndpointDescriptionGET/assignmentsFetches all shifts for a date.POST/assignmentsCreates new shifts (handles is_out logic).DELETE/assignments/:idRemoves an existing shift.🤝 ContributingWe welcome contributions from the Koha community. Please fork the repository and submit a pull request with bug fixes or new features.📝 LicenseThis project is licensed under the GPL-3.0 License. See the LICENSE file for details.
+3. DeployNavigate to Koha Administration > Manage Plugins.Click Upload plugin and select your kohastaffschedule.kpz file.Once the installation completes, click Run tool from the plugin actions menu to initialize the dashboard.
+  
+🔌 API DocumentationThe plugin exposes internal REST endpoints:
+  MethodEndpointDescriptionGET/assignmentsFetches all shifts for a date.
+  POST/assignmentsCreates new shifts (handles is_out logic).
+  DELETE/assignments/:idRemoves an existing shift.
+  
+  🤝 ContributingWe welcome contributions from the Koha community. Please fork the repository and submit a pull request with bug fixes or new features.
+  
+  📝 LicenseThis project is licensed under the GPL-3.0 License. See the LICENSE file for details.
