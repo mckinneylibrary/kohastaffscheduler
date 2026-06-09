@@ -19,6 +19,9 @@ sub get {
             id       => "" . $user->borrowernumber,
             name     => $name,
             email    => $user->email // '',
+            # Branch the user belongs to; lets the Dashboard default to
+            # that branch's staff (mirrors run.pl _api_me home_branch).
+            home_branch => ( eval { $user->branchcode } // undef ),
             is_admin => ( $flags && ( $flags == 1 || ( $flags & 1 ) ) ) ? \1 : \0,
         }
     );

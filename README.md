@@ -245,6 +245,24 @@ table.
 
 ## Version history
 
+- **1.0.24** — Current-hour highlight on the Dashboard. When the Dashboard is
+  showing **today**, the column for the current hour is highlighted with an amber
+  band across the header and every staff row (and the hour label is brightened),
+  making it easy to see "where we are right now" at a glance. The highlight
+  refreshes automatically each minute and disappears when viewing other dates.
+- **1.0.23** — Resizable Dashboard staff column. The vertical divider between the
+  staff-name column and the timeline can now be dragged left/right to widen or
+  narrow the name column, so long names (e.g. "Charlotte McD…") can be shown in
+  full. The chosen width is remembered per browser; double-click the divider to
+  reset it to the default.
+- **1.0.22** — Dashboard defaults to *your* branch, plus staff sorting.
+  1. **Branch-scoped default view.** When a staff member opens the Dashboard, it
+     now defaults to showing only the people working at **their logged-in branch**
+     for that day (the `me` endpoint now returns the user's `home_branch` from
+     Koha's `userenv`). A "Showing staff at … — Show all staff" banner lets them
+     drop the scope, and the Branches filter still lets them pick other branches.
+  2. **Sortable staff list.** A Sort control on the Dashboard orders the staff
+     rows by **Last name** (default), **First name**, or **Team**.
 - **1.0.21** — Fixed marking a staff member **"Out"** (or any virtual branch)
   failing with a `404 [text/html] … errorpage.tt` error when they had overlapping
   task zones. The server's OUT override already deletes the overlapping zones, then

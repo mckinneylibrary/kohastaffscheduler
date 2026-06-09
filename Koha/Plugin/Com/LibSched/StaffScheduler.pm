@@ -10,7 +10,7 @@ use JSON qw(encode_json decode_json);
 use Data::UUID;
 use Try::Tiny;
 
-our $VERSION = '1.0.21';
+our $VERSION = '1.0.24';
 our $metadata = {
     name            => 'Staff Scheduler',
     author          => 'LibSched',
@@ -555,6 +555,9 @@ sub _api_me {
             id       => "" . $env->{number},
             name     => $name,
             email    => $env->{emailaddress} // '',
+            # Branch the user is logged in at; lets the Dashboard default
+            # to that branch's staff for the day.
+            home_branch => $env->{branch} // undef,
             is_admin => $self->_user_can_edit( $env->{number} ) ? \1 : \0,
             is_superlibrarian => _patron_is_superlibrarian( $env->{number} ) ? \1 : \0,
             edit_permission   => $self->_edit_permission,
