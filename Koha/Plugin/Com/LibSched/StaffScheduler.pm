@@ -10,13 +10,13 @@ use JSON qw(encode_json decode_json);
 use Data::UUID;
 use Try::Tiny;
 
-our $VERSION = '1.0.24';
+our $VERSION = '1.0.27';
 our $metadata = {
     name            => 'Staff Scheduler',
     author          => 'LibSched',
     description     => 'Library staff scheduling — pulls staff, branches & holidays from Koha',
     date_authored   => '2026-05-27',
-    date_updated    => '2026-06-02',
+    date_updated    => '2026-06-17',
     minimum_version => '22.05.00.000',
     maximum_version => undef,
     version         => $VERSION,

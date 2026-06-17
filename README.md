@@ -98,7 +98,12 @@ The tool has five pages:
 - **Reports** — coverage variance, zone utilization, a daily headcount heatmap,
   and the audit log.
 - **Settings** — manage branches, virtual branches, work zones, staff roles,
-  department teams, and closures / holidays.
+  department teams, and closures / holidays. Includes **Backup & Restore**:
+  export every entity to CSV, download a one‑click backup `.zip` (CSVs plus a
+  self‑contained, printable offline schedule that opens in any browser with no
+  internet), and re‑upload edited assignment / zone / team CSVs with a
+  preview of every create / update / skip before anything is saved. The app
+  also saves a fresh backup automatically once per day.
 
 ---
 
@@ -245,6 +250,39 @@ table.
 
 ## Version history
 
+- **1.0.27** — Drag to move & resize shifts on the Dashboard timeline. Grab a
+  shift body to slide it to a new time (its length is preserved), or drag the
+  left/right edge to make it shorter or longer — everything snaps to 15‑minute
+  steps. Superlibrarians can also drag a **Task Zone** straight up or down onto
+  another staff member's row to reassign it. A plain click still opens the edit
+  window; only a deliberate drag moves a shift. Every drag is checked against
+  the same rules as the edit form (no same‑type overlaps, task zones must stay
+  within Branch Hours, branch‑bound zones, closed days) and a Branch Hours block
+  cannot be moved or shrunk if doing so would leave one of its Task Zones
+  stranded — an invalid drop snaps back and explains why. Staff can only drag
+  their own Task Zones; superlibrarians can drag anything, Branch Hours included.
+  Each drag edits just that one shift and is audit‑logged like any other change.
+- **1.0.26** — Backup, restore & offline view (Settings › Backup & Restore,
+  superlibrarians only). Export every entity to its own CSV, or download a
+  single backup `.zip` bundling all CSVs plus a self‑contained, printable
+  **offline schedule** (an HTML file with the data inlined — opens in any
+  browser with no internet, ideal when the network or Koha is down). Re‑upload
+  an edited **assignments**, **zones** or **teams** CSV: rows are matched by id
+  (update) or by name (create), validated against the overlap / nesting /
+  branch rules, and shown as a create / update / skip **preview** before
+  commit. Imports are additive — they never delete. A once‑per‑day automatic
+  backup runs in the background for superlibrarians so the latest schedule is
+  always saved to disk. (Staff, branches and closures are owned by Koha, so
+  they are exported for reference but cannot be re‑imported.)
+- **1.0.25** — No more overlapping shifts of the same type. A staff member can no
+  longer be given two **Branch Hours** that overlap (whether at the same branch
+  or different branches), and likewise cannot have two **Task Zones** overlapping
+  the same time. In other words each point in the day holds at most one Branch
+  Hours shift and one Task Zone. (Task zones still nest inside branch hours — that
+  pairing is expected; only same-type overlaps are blocked.) Enforced everywhere
+  shifts are created or edited: the Dashboard add/edit/clone flows and the
+  Schedule batch-create and edit flows (the batch summary now reports any slots
+  skipped for "conflicting with an existing task zone").
 - **1.0.24** — Current-hour highlight on the Dashboard. When the Dashboard is
   showing **today**, the column for the current hour is highlighted with an amber
   band across the header and every staff row (and the hour label is brightened),
