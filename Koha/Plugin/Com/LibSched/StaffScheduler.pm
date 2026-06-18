@@ -10,7 +10,7 @@ use JSON qw(encode_json decode_json);
 use Data::UUID;
 use Try::Tiny;
 
-our $VERSION = '1.0.27';
+our $VERSION = '1.0.28';
 our $metadata = {
     name            => 'Staff Scheduler',
     author          => 'LibSched',
