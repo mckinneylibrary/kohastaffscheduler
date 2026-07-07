@@ -7,6 +7,123 @@
 
 <style>
   #root { width: 100%; min-height: calc(100vh - 80px); }
+
+  /* ── Font-size picker widget ───────────────────────────── */
+  #ss-font-picker {
+    position: fixed;
+    bottom: 18px;
+    right: 18px;
+    z-index: 9999;
+    font-family: sans-serif;
+  }
+
+  #ss-font-toggle {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 10px;
+    background: #2d6a9f;
+    color: #fff;
+    border: none;
+    border-radius: 20px;
+    cursor: pointer;
+    font-size: 13px;
+    box-shadow: 0 2px 6px rgba(0,0,0,.3);
+    white-space: nowrap;
+  }
+  #ss-font-toggle:hover { background: #1e4f7a; }
+  #ss-font-toggle svg   { flex-shrink: 0; }
+
+  #ss-font-panel {
+    display: none;
+    position: absolute;
+    bottom: calc(100% + 8px);
+    right: 0;
+    background: #fff;
+    border: 1px solid #bbb;
+    border-radius: 8px;
+    padding: 14px 16px;
+    box-shadow: 0 4px 16px rgba(0,0,0,.18);
+    min-width: 230px;
+  }
+  #ss-font-panel.open { display: block; }
+
+  #ss-font-panel h4 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 1px solid #e5e5e5;
+    padding-bottom: 8px;
+  }
+
+  .ss-size-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+  }
+  .ss-size-row label {
+    font-size: 12px;
+    color: #555;
+    width: 38px;
+    flex-shrink: 0;
+  }
+  .ss-size-row input[type=range] {
+    flex: 1;
+    accent-color: #2d6a9f;
+    cursor: pointer;
+  }
+  .ss-size-row .ss-val {
+    font-size: 12px;
+    color: #333;
+    font-weight: 600;
+    width: 34px;
+    text-align: right;
+    flex-shrink: 0;
+  }
+
+  .ss-presets {
+    display: flex;
+    gap: 6px;
+    margin-top: 4px;
+    flex-wrap: wrap;
+  }
+  .ss-presets button {
+    flex: 1;
+    min-width: 40px;
+    padding: 4px 4px;
+    font-size: 11px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    background: #f5f5f5;
+    cursor: pointer;
+    color: #333;
+  }
+  .ss-presets button:hover  { background: #e0eaf5; border-color: #2d6a9f; }
+  .ss-presets button.active { background: #2d6a9f; color: #fff; border-color: #2d6a9f; }
+
+  .ss-hint {
+    margin-top: 10px;
+    font-size: 10px;
+    color: #888;
+    line-height: 1.4;
+  }
+
+  .ss-reset {
+    display: block;
+    width: 100%;
+    margin-top: 10px;
+    padding: 5px;
+    font-size: 11px;
+    border: 1px solid #bbb;
+    border-radius: 4px;
+    background: #f9f9f9;
+    cursor: pointer;
+    color: #555;
+    text-align: center;
+  }
+  .ss-reset:hover { background: #fee; border-color: #c00; color: #c00; }
 </style>
 
 <div id="breadcrumbs">
@@ -16,6 +133,45 @@
 
 <div class="main container-fluid">
   <div id="root"></div>
+</div>
+
+<!-- Injected font-size overrides — content updated by JS below -->
+<style id="ss-size-override"></style>
+
+<!-- ── Font-size picker widget ──────────────────────────────── -->
+<div id="ss-font-picker">
+  <div id="ss-font-panel">
+    <h4>Scheduler text size</h4>
+
+    <div class="ss-size-row">
+      <label for="ss-slider">Size</label>
+      <input type="range" id="ss-slider" min="8" max="18" step="1" value="11" />
+      <span class="ss-val" id="ss-slider-val">11px</span>
+    </div>
+
+    <div class="ss-presets">
+      <button data-size="9">9px</button>
+      <button data-size="10">10px</button>
+      <button data-size="11">11px</button>
+      <button data-size="12">12px</button>
+      <button data-size="13">13px</button>
+      <button data-size="14">14px</button>
+    </div>
+
+    <p class="ss-hint">Adjusts text inside locations, shifts, and the timeline grid. Each person's browser remembers their choice.</p>
+
+    <button class="ss-reset" id="ss-reset">Reset to default (11px)</button>
+  </div>
+
+  <button id="ss-font-toggle" title="Change scheduler text size">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none"
+         stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="4 7 4 4 20 4 20 7"/>
+      <line x1="9" y1="20" x2="15" y2="20"/>
+      <line x1="12" y1="4" x2="12" y2="20"/>
+    </svg>
+    Text size
+  </button>
 </div>
 
 <script>
@@ -33,5 +189,125 @@
      regardless of how Apache/Plack maps /plugin/<class>/htdocs/ -->
 <link rel="stylesheet" href="[% asset_base %]index.css" />
 <script type="module" src="[% asset_base %]index.js"></script>
+
+<script>
+(function () {
+  'use strict';
+
+  var STORAGE_KEY = 'staffsched-font-size';
+  var DEFAULT_PX  = 11; // matches the app's largest hard-coded size (text-[11px])
+
+  /*
+   * The compiled React bundle uses Tailwind arbitrary-value classes with
+   * hard-coded pixel sizes for the scheduler grid content:
+   *
+   *   text-[8px]   — tiny badges / overflow indicators  (3 uses)
+   *   text-[9px]   — section headings, pill labels      (29 uses)
+   *   text-[10px]  — inputs, control labels             (32 uses)
+   *   text-[11px]  — location row headers, shift text   (19 uses)
+   *
+   * These do NOT respond to CSS custom-property overrides, so we target the
+   * compiled class names directly and scale them relative to the user's
+   * chosen base (which maps to what was 11 px by default).
+   */
+  function buildCSS(base) {
+    if (base === DEFAULT_PX) return ''; // no overrides needed at the default
+    var d = base - DEFAULT_PX; // offset from default
+    // Keep each step proportional; floor at 6 px so nothing disappears.
+    function scaled(orig) { return Math.max(6, orig + d) + 'px'; }
+
+    // Tailwind encodes brackets as \[…\] in the class name; in a stylesheet
+    // those backslashes must be present so the selector matches the DOM class.
+    return [
+      '#root .text-\\[8px\\]  { font-size: ' + scaled(8)  + ' !important; }',
+      '#root .text-\\[9px\\]  { font-size: ' + scaled(9)  + ' !important; }',
+      '#root .text-\\[10px\\] { font-size: ' + scaled(10) + ' !important; }',
+      '#root .text-\\[11px\\] { font-size: ' + scaled(11) + ' !important; }',
+    ].join('\n');
+  }
+
+  function applySize(px) {
+    var sheet = document.getElementById('ss-size-override');
+    if (sheet) sheet.textContent = buildCSS(px);
+  }
+
+  function updateUI(px) {
+    var slider    = document.getElementById('ss-slider');
+    var sliderVal = document.getElementById('ss-slider-val');
+    if (!slider) return;
+    slider.value          = px;
+    sliderVal.textContent = px + 'px';
+    document.querySelectorAll('.ss-presets button').forEach(function (btn) {
+      btn.classList.toggle('active', parseInt(btn.dataset.size, 10) === px);
+    });
+  }
+
+  function loadSaved() {
+    var raw = localStorage.getItem(STORAGE_KEY);
+    var n   = raw ? parseInt(raw, 10) : NaN;
+    return isNaN(n) ? DEFAULT_PX : n;
+  }
+
+  function save(px) {
+    if (px === DEFAULT_PX) {
+      localStorage.removeItem(STORAGE_KEY);
+    } else {
+      localStorage.setItem(STORAGE_KEY, String(px));
+    }
+  }
+
+  // Apply saved size as early as possible (before React paints) so there is
+  // no flash of wrong-sized text on reload.
+  var saved = loadSaved();
+  applySize(saved);
+
+  document.addEventListener('DOMContentLoaded', function () {
+    var picker   = document.getElementById('ss-font-picker');
+    var panel    = document.getElementById('ss-font-panel');
+    var toggle   = document.getElementById('ss-font-toggle');
+    var slider   = document.getElementById('ss-slider');
+    var resetBtn = document.getElementById('ss-reset');
+
+    updateUI(saved);
+
+    // Toggle panel open/closed
+    toggle.addEventListener('click', function (e) {
+      e.stopPropagation();
+      panel.classList.toggle('open');
+    });
+
+    // Close panel when clicking outside
+    document.addEventListener('click', function (e) {
+      if (!picker.contains(e.target)) panel.classList.remove('open');
+    });
+
+    // Slider — live preview while dragging
+    slider.addEventListener('input', function () {
+      var px = parseInt(slider.value, 10);
+      document.getElementById('ss-slider-val').textContent = px + 'px';
+      applySize(px);
+      save(px);
+      updateUI(px);
+    });
+
+    // Preset buttons
+    document.querySelectorAll('.ss-presets button').forEach(function (btn) {
+      btn.addEventListener('click', function () {
+        var px = parseInt(btn.dataset.size, 10);
+        applySize(px);
+        save(px);
+        updateUI(px);
+      });
+    });
+
+    // Reset to default
+    resetBtn.addEventListener('click', function () {
+      applySize(DEFAULT_PX);
+      save(DEFAULT_PX);
+      updateUI(DEFAULT_PX);
+    });
+  });
+})();
+</script>
 
 [% INCLUDE 'intranet-bottom.inc' %]
