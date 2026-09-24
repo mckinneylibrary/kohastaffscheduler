@@ -7,6 +7,28 @@
 
 <style>
   #root { width: 100%; min-height: calc(100vh - 80px); }
+  #ss-sick-calls { margin: 16px 0 4px; font: 14px/1.5 sans-serif; color: #213346; }
+  #ss-sick-calls .sc-bar { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  #ss-sick-calls .sc-count { background:#b91c1c; color:white; border-radius:12px; padding:1px 9px; font-weight:bold; }
+  #ss-sick-calls button { cursor:pointer; border:1px solid #3276a5; background:#fff; color:#164b70; padding:6px 11px; border-radius:4px; }
+  #ss-sick-calls button:hover { background:#e1eff9; }
+  #ss-sick-calls button:disabled { cursor:wait; opacity:.6; }
+  #ss-sick-calls .sc-toggle { display:inline-flex; align-items:center; gap:7px; padding:6px 12px; border:1px solid #d1d5db; border-radius:4px; color:#374151; font-size:12px; font-weight:700; line-height:1.25; background:#fff; box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  #ss-sick-calls .sc-toggle:hover { background:#f3f4f6; }
+  #ss-sick-calls .sc-toggle:focus-visible { outline:2px solid #2d6a9f; outline-offset:2px; }
+  #ss-sick-calls .sc-arrow { font-size:15px; line-height:10px; }
+  #ss-sick-calls .sc-panel { border:1px solid #bbd3e3; border-radius:6px; margin-top:8px; padding:16px; background:#fff; }
+  #ss-sick-calls .sc-panel[hidden], #ss-sick-calls [hidden] { display:none !important; }
+  #ss-sick-calls form { display:flex; align-items:end; gap:12px; flex-wrap:wrap; }
+  #ss-sick-calls label { display:flex; flex-direction:column; gap:4px; font-weight:600; }
+  #ss-sick-calls input, #ss-sick-calls textarea { border:1px solid #9eaebd; border-radius:4px; padding:6px; font:inherit; font-weight:normal; }
+  #ss-sick-calls textarea { width:min(340px,80vw); min-height:34px; }
+  #ss-sick-calls .sc-message { margin:9px 0; padding:9px; background:#e7f3eb; }
+  #ss-sick-calls .sc-message.error { background:#fff0ec; color:#9b2c19; }
+  #ss-sick-calls .sc-list { list-style:none; padding:0; margin:8px 0 16px; }
+  #ss-sick-calls .sc-list li { padding:10px 0; border-bottom:1px solid #e1e6ea; }
+  #ss-sick-calls .sc-meta { color:#4d6476; font-size:12px; }
+  #ss-sick-calls .sc-note { white-space:pre-wrap; overflow-wrap:anywhere; }
 
   /* ── Font-size picker widget ───────────────────────────── */
   #ss-font-picker {
@@ -132,6 +154,7 @@
 </div>
 
 <div class="main container-fluid">
+  <section id="ss-sick-calls" aria-label="Sick-call reports"></section>
   <div id="root"></div>
 </div>
 
@@ -189,6 +212,7 @@
      regardless of how Apache/Plack maps /plugin/<class>/htdocs/ -->
 <link rel="stylesheet" href="[% asset_base %]index.css" />
 <script type="module" src="[% asset_base %]index.js"></script>
+<script defer src="[% asset_base %]sick-call.js"></script>
 
 <script>
 (function () {

@@ -4,19 +4,17 @@ use Modern::Perl;
 use base qw(Koha::Plugins::Base);
 use Koha::Token;
 use C4::Context;
-use C4::Auth qw();
 use Koha::Patrons;
 use JSON qw(encode_json decode_json);
-use Data::UUID;
 use Try::Tiny;
 
-our $VERSION = '1.0.29';
+our $VERSION = '1.0.36';
 our $metadata = {
     name            => 'Staff Scheduler',
     author          => 'LibSched',
     description     => 'Library staff scheduling — pulls staff, branches & holidays from Koha',
     date_authored   => '2026-05-27',
-    date_updated    => '2026-06-17',
+    date_updated    => '2026-09-23',
     minimum_version => '22.05.00.000',
     maximum_version => undef,
     version         => $VERSION,
@@ -36,6 +34,27 @@ sub metadata { return $metadata; }
 sub install {
     my ( $self, $args ) = @_;
     my $dbh = C4::Context->dbh;
+
+    $dbh->do(q{
+        CREATE TABLE IF NOT EXISTS `koha_plugin_staffsched_sick_calls` (
+            `id` INT NOT NULL AUTO_INCREMENT,
+            `employee_id` INT NOT NULL,
+            `staff_name` VARCHAR(255) NOT NULL,
+            `start_date` DATE NOT NULL,
+            `end_date` DATE NOT NULL,
+            `note` VARCHAR(500) NULL,
+            `created_at` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            `acknowledged_by` INT NULL,
+            `acknowledged_name` VARCHAR(255) NULL,
+            `acknowledged_at` DATETIME NULL,
+            `email_status` VARCHAR(20) NOT NULL DEFAULT 'disabled',
+            `email_detail` VARCHAR(500) NULL,
+            PRIMARY KEY (`id`),
+            UNIQUE KEY `unique_staff_range` (`employee_id`, `start_date`, `end_date`),
+            KEY `idx_pending` (`acknowledged_at`, `created_at`),
+            KEY `idx_staff` (`employee_id`, `created_at`)
+        ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+    });
 
     $dbh->do(q{
         CREATE TABLE IF NOT EXISTS `koha_plugin_staffsched_zones` (
@@ -179,6 +198,7 @@ sub upgrade {
 sub uninstall {
     my ( $self, $args ) = @_;
     my $dbh = C4::Context->dbh;
+    $dbh->do('DROP TABLE IF EXISTS `koha_plugin_staffsched_sick_calls`');
     $dbh->do('DROP TABLE IF EXISTS `koha_plugin_staffsched_audit`');
     $dbh->do('DROP TABLE IF EXISTS `koha_plugin_staffsched_assignments`');
     $dbh->do('DROP TABLE IF EXISTS `koha_plugin_staffsched_branch_colors`');
@@ -271,6 +291,7 @@ sub asset {
     # Whitelist allowed files + their Content-Types
     my %types = (
         'index.js'    => 'application/javascript; charset=utf-8',
+        'sick-call.js' => 'application/javascript; charset=utf-8',
         'index.css'   => 'text/css; charset=utf-8',
         'favicon.svg' => 'image/svg+xml',
     );
@@ -359,7 +380,15 @@ sub staff_categorycode {
     return $self->retrieve_data('staff_categorycode') || 'STAFF';
 }
 
-sub _uuid { return lc( Data::UUID->new->create_str ); }
+sub _uuid {
+    # RFC 4122 UUID v4, no external modules required
+    return sprintf '%08x-%04x-%04x-%04x-%012x',
+        int( rand(0xFFFFFFFF) ),
+        int( rand(0xFFFF) ),
+        ( int( rand(0x0FFF) ) | 0x4000 ),    # version 4
+        ( int( rand(0x3FFF) ) | 0x8000 ),    # variant bits
+        int( rand(0xFFFFFFFFFFFF) );
+}
 
 # Sentinel ID for the virtual "Out" location. The frontend treats this
 # like any other branch in pickers, but on the server it has special
@@ -437,7 +466,7 @@ sub _json_response {
     my ( $self, $status, $payload ) = @_;
     my $cgi = $self->{cgi};
     print $cgi->header(
-        -status        => "$status " . ( $status == 200 ? 'OK' : $status == 201 ? 'Created' : $status == 204 ? 'No Content' : $status == 400 ? 'Bad Request' : $status == 401 ? 'Unauthorized' : $status == 404 ? 'Not Found' : 'Error' ),
+        -status        => "$status " . ( $status == 200 ? 'OK' : $status == 201 ? 'Created' : $status == 204 ? 'No Content' : $status == 400 ? 'Bad Request' : $status == 401 ? 'Unauthorized' : $status == 403 ? 'Forbidden' : $status == 404 ? 'Not Found' : $status == 405 ? 'Method Not Allowed' : $status == 409 ? 'Conflict' : 'Error' ),
         -type          => 'application/json',
         -charset       => 'UTF-8',
         -cache_control => 'no-store',
@@ -452,11 +481,10 @@ sub _read_body {
     my ($self) = @_;
     my $cgi = $self->{cgi};
 
-    # Hosted-Koha workaround: real POSTs to /cgi-bin/koha/plugins/run.pl
-    # get rejected with an empty 403 by ByWater's intranet auth layer
-    # before any plugin code runs (CSRF + WAF combined). The frontend
-    # therefore tunnels mutations through GET with the JSON body
-    # base64-encoded in the _body_b64 query param. Decode that first.
+    # Legacy scheduler writes tunnel JSON in _body_b64 on GET. Sick-call
+    # writes send the same field in a POST form body instead, so dates and
+    # notes never appear in logged URLs. Decode either transport here;
+    # _api_sick_calls separately enforces the actual HTTP POST method.
     my $b64 = scalar $cgi->param('_body_b64');
     if ( defined $b64 && length $b64 ) {
         require MIME::Base64;
@@ -527,6 +555,9 @@ sub api {
         }
         elsif ( $endpoint eq 'audit' ) {
             return $self->_api_audit( $dbh, $method, $body, $cgi );
+        }
+        elsif ( $endpoint eq 'sick_calls' ) {
+            return $self->_api_sick_calls( $dbh, $method, $op, $body, $cgi );
         }
         else {
             return $self->_json_response( 404, { error => "Unknown endpoint: '$endpoint'" } );
@@ -1032,6 +1063,129 @@ sub _apply_out_override {
             AND end_time    > ?},
         undef, $emp, $date, $id, $end, $start
     );
+}
+
+# Current user's borrowernumber, or 0 if not logged in.
+sub _api_sick_calls {
+    my ( $self, $dbh, $method, $op, $body, $cgi ) = @_;
+    my $me = _current_borrowernumber();
+    return $self->_json_response(401, { error => 'Sign in to report an absence.' }) unless $me;
+    my $admin = $self->_is_admin;
+    my $table = 'koha_plugin_staffsched_sick_calls';
+
+    if ( $method eq 'GET' ) {
+        my $scope = scalar $cgi->param('scope') // 'mine';
+        return $self->_json_response(403, { error => 'Supervisor access required.' })
+            if $scope ne 'mine' && !$admin;
+        return $self->_json_response(400, { error => 'Invalid view.' })
+            unless $scope =~ /\A(?:mine|pending)\z/;
+        my $where = $scope eq 'mine' ? 'WHERE s.employee_id = ?'
+                  : 'WHERE s.acknowledged_at IS NULL';
+        my $limit = $scope eq 'pending' ? '' : 'LIMIT 200';
+        my $rows = $dbh->selectall_arrayref(
+            "SELECT s.id, s.employee_id, s.staff_name, s.start_date, s.end_date,
+                    s.note, s.created_at, s.acknowledged_by, s.acknowledged_name,
+                    s.acknowledged_at
+             FROM $table s $where ORDER BY s.created_at DESC, s.id DESC $limit",
+            { Slice => {} }, $scope eq 'mine' ? ($me) : ()
+        );
+        return $self->_json_response(200, { reports => $rows });
+    }
+
+    # Hosted Koha rejects plugin POSTs before they reach us. Tunnel only the
+    # logical method in the URL; keep the report and token in request headers.
+    # Never accept the older _body_b64 query-string transport for absences:
+    # URLs (including base64 text) are routinely retained in access logs.
+    return $self->_json_response(405, { error => 'Use the protected sick-call transport.' })
+        unless $method eq 'POST' && ($ENV{REQUEST_METHOD} // '') eq 'GET'
+            && (scalar $cgi->param('_method') // '') eq 'POST';
+    return $self->_json_response(400, { error => 'Sick-call details cannot be sent in the URL.' })
+        if defined scalar $cgi->param('_body_b64');
+    my $token = $ENV{HTTP_X_CSRF_TOKEN} // '';
+    return $self->_json_response(403, { error => 'Invalid session token. Reload and try again.' })
+        unless $token && Koha::Token->new->check_csrf({
+            session_id => scalar $cgi->cookie('CGISESSID'), token => $token
+        });
+    my $encoded = $ENV{HTTP_X_STAFFSCHED_PAYLOAD} // '';
+    return $self->_json_response(400, { error => 'Invalid or missing report data.' })
+        unless length($encoded) && length($encoded) <= 8192
+            && $encoded =~ /\A[A-Za-z0-9_-]+\z/;
+    require MIME::Base64;
+    $encoded =~ tr{-_}{+/};
+    my $decoded = MIME::Base64::decode_base64($encoded);
+    $body = eval { decode_json($decoded) };
+    return $self->_json_response(400, { error => 'Invalid report data.' })
+        unless ref($body) eq 'HASH';
+
+    if ( $op eq 'acknowledge' ) {
+        return $self->_json_response(403, { error => 'Only a scheduler administrator can acknowledge reports.' })
+            unless $admin;
+        my $id = ref($body) eq 'HASH' ? ($body->{id} // '') : '';
+        return $self->_json_response(400, { error => 'Invalid report ID.' })
+            unless $id =~ /\A[1-9][0-9]{0,10}\z/;
+        my $changed = $dbh->do(
+            "UPDATE $table SET acknowledged_by = ?, acknowledged_name = ?, acknowledged_at = NOW()
+             WHERE id = ? AND acknowledged_at IS NULL",
+            undef, $me, $self->_current_display_name, $id
+        );
+        my $row = $dbh->selectrow_hashref(
+            "SELECT id, employee_id, staff_name, start_date, end_date, note,
+                    created_at, acknowledged_by, acknowledged_name, acknowledged_at
+             FROM $table WHERE id = ?", undef, $id
+        );
+        return $self->_json_response(404, { error => 'Report not found.' }) unless $row;
+        return $self->_json_response(200, { report => $row, already_acknowledged => $changed > 0 ? \0 : \1 });
+    }
+    return $self->_json_response(400, { error => 'Unsupported action.' }) unless $op eq 'report';
+    return $self->_json_response(400, { error => 'Invalid report.' }) unless ref($body) eq 'HASH';
+    my $start = $body->{start_date} // '';
+    my $end = $body->{end_date} // '';
+    return $self->_json_response(400, { error => 'Choose valid dates in YYYY-MM-DD format.' })
+        unless $start =~ /\A\d{4}-\d{2}-\d{2}\z/ && $end =~ /\A\d{4}-\d{2}-\d{2}\z/;
+    require Time::Piece;
+    my ($first, $last) = eval {
+        my $a = Time::Piece->strptime($start, '%Y-%m-%d');
+        my $b = Time::Piece->strptime($end, '%Y-%m-%d');
+        die 'Invalid date' unless $a->strftime('%Y-%m-%d') eq $start
+                           && $b->strftime('%Y-%m-%d') eq $end;
+        ($a, $b);
+    };
+    return $self->_json_response(400, { error => 'Choose valid calendar dates.' })
+        unless $first && $last;
+    return $self->_json_response(400, { error => 'The end date must be on or after the start date (up to 31 days).' })
+        if $start gt $end || ($last - $first) > 30 * 86400;
+    my $note = $body->{note} // '';
+    return $self->_json_response(400, { error => 'Note must be text, at most 500 characters.' })
+        if ref($note) || length($note) > 500;
+    $note =~ s/^\s+|\s+$//g;
+    $note =~ s/[\x00-\x08\x0b\x0c\x0e-\x1f]//g;
+
+    my $existing = $dbh->selectrow_hashref(
+        "SELECT id FROM $table WHERE employee_id = ? AND start_date <= ? AND end_date >= ? LIMIT 1",
+        undef, $me, $end, $start
+    );
+    return $self->_json_response(409, { error => 'You have already reported an overlapping date range.', existing_id => $existing->{id} })
+        if $existing;
+    my $inserted = eval {
+        $dbh->do(
+            "INSERT INTO $table (employee_id, staff_name, start_date, end_date, note, email_status)
+             VALUES (?, ?, ?, ?, ?, 'disabled')",
+            undef, $me, $self->_current_display_name, $start, $end, $note
+        );
+        1;
+    };
+    return $self->_json_response(409, { error => 'This date range has already been reported. Refresh your reports.' })
+        unless $inserted;
+    my $id = $dbh->last_insert_id(undef, undef, $table, 'id');
+    my $row = $dbh->selectrow_hashref(
+        "SELECT id, employee_id, staff_name, start_date, end_date, note,
+                created_at, acknowledged_by, acknowledged_name, acknowledged_at
+         FROM $table WHERE id = ?", undef, $id
+    );
+    return $self->_json_response(201, {
+        report => $row,
+        message => 'Report saved. Existing schedule assignments were not changed.'
+    });
 }
 
 # Current user's borrowernumber, or 0 if not logged in.

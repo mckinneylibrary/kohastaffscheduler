@@ -3,10 +3,15 @@ package Koha::Plugin::Com::LibSched::StaffScheduler::API::V1::Assignments;
 use Modern::Perl;
 use Mojo::Base 'Mojolicious::Controller';
 use C4::Context;
-use Data::UUID;
 
 sub _uuid {
-    return lc( Data::UUID->new->create_str );
+    # RFC 4122 UUID v4, generated without an optional CPAN dependency.
+    return sprintf '%08x-%04x-%04x-%04x-%012x',
+        int( rand(0xFFFFFFFF) ),
+        int( rand(0xFFFF) ),
+        ( int( rand(0x0FFF) ) | 0x4000 ),
+        ( int( rand(0x3FFF) ) | 0x8000 ),
+        int( rand(0xFFFFFFFFFFFF) );
 }
 
 sub _row_to_obj {

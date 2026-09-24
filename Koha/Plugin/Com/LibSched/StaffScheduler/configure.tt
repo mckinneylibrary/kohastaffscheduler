@@ -16,7 +16,7 @@
     <div class="col-sm-10 col-sm-push-2">
       <h1>Staff Scheduler &mdash; Configuration</h1>
 
-      [% IF saved %]
+      [% IF saved == 1 %]
         <div class="dialog message">Settings saved.</div>
       [% END %]
 
